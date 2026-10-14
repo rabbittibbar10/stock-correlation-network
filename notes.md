@@ -36,3 +36,44 @@
 
 “Dropped duplicate share classes GOOG and NWS (correlations 0.99 and 0.97 with GOOGL and NWSA): the same company counted twice would double its weight in hub and degree counts.”
 “Kept highly correlated different companies (e.g. MET/PRU 0.91, FITB/RF 0.91) because that similarity is real economic structure.”
+
+
+## Minimum spanning tree (Stage 5)
+- Method: Mantegna distance d = sqrt(2(1 - rho)), then the minimum spanning tree (Kruskal's algorithm, via scipy).
+  455 stocks, 454 links; checked it is a valid tree.
+- Why a tree: it needs no threshold, is always connected, and is equivalent to single-linkage
+  hierarchical clustering. Downside: it keeps only N - 1 links and throws away all loops.
+
+### Strongest links (all same-sector, all economically sensible)
+- UDR / Vivmark (apartment REITs) 0.92; FRT / REG (shopping-centre REITs) 0.91;
+  FITB / RF (regional banks) 0.91; MET / PRU (life insurers) 0.91
+- Also: Visa / Mastercard, AMAT / LRCX (chip equipment), DHI / LEN (housebuilders),
+  a chain of regional banks (CFG-FITB-RF-KEY) and of Midwest utilities (CMS-LNT-WEC)
+
+### Hubs
+- Largest: Parker Hannifin (15), Prudential (15), Moody's (14), Illinois Tool Works (12), Ameriprise (10)
+- Diversified industrial suppliers and market-linked financials: firms whose business is a slice of the whole economy
+- 57% of stocks are leaves (only one link)
+
+### Sector purity vs null model
+- 80.8% of links join same-sector stocks; 11.1% +/- 1.6% expected with shuffled labels
+  (1000 shuffles) -> z = 45
+- The chance baseline is about sum of (sector share)^2: big sectors make same-sector pairs common by chance
+- By sector: Energy 90%, Utilities 90%, Health Care 86% (one dominant driver each)
+  ... Communication Services only 25% (prediction from Stage 3 confirmed),
+  Consumer Discretionary and Materials about 54%
+
+### Core-periphery
+- Financials and Industrials form the core of the tree, where the hubs are
+- Real Estate, Utilities, Consumer Staples, Energy and Tech branch off as separate arms
+- Matches Onnela et al. (2003). Test properly with k-core in Stage 7
+
+### Finding: Moody's links a "data and ratings" cluster that cuts across GICS sectors
+- MCO's 14 neighbours: S&P Global, MSCI, FactSet, Nasdaq, BlackRock, Visa (Financials);
+  Equifax, Broadridge, Cintas, Copart (Industrials); Fair Isaac, Verisign, Gen Digital (IT); IQVIA (Health Care)
+- What they share is a business model, not a product: asset-light, recurring-revenue,
+  high-margin businesses (ratings, indices, credit scores, financial data, payments, licensing)
+- So returns group stocks by business model as well as by GICS sector.
+  GICS classifies by what a company sells; the market prices how it makes money
+- Prediction for Stage 6: Louvain may find a "data/quality" community that lowers ARI vs GICS
+  but makes economic sense. A low ARI is not automatically a failure of the method.

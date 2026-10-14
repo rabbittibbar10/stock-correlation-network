@@ -1,10 +1,15 @@
 """Correlation-matrix and network analyses."""
 from __future__ import annotations
 
+import networkx as nx
 import numpy as np
 import pandas as pd
+from scipy.sparse.csgraph import minimum_spanning_tree as scipy_mst
 
 
+# --------------------------------------------------------------------------
+# Random matrix theory
+# --------------------------------------------------------------------------
 def eigen_decomposition(C: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
     """Eigenvalues (largest first) and matching eigenvectors (as columns)."""
     vals, vecs = np.linalg.eigh(C.values)      # eigh is for symmetric matrices: fast and exact
@@ -30,3 +35,44 @@ def remove_market_mode(C: pd.DataFrame, n_days: int) -> pd.DataFrame:
     keep = [k for k in range(1, N) if vals[k] > lam_max]
     Cg = (vecs[:, keep] * vals[keep]) @ vecs[:, keep].T
     return pd.DataFrame(Cg, index=C.index, columns=C.columns)
+
+
+# --------------------------------------------------------------------------
+# Minimum spanning tree
+# --------------------------------------------------------------------------
+def mantegna_distance(C: pd.DataFrame) -> pd.DataFrame:
+    """d = sqrt(2(1 - rho)): turns correlations into a true distance (Mantegna 1999)."""
+    return np.sqrt(np.clip(2 * (1 - C), 0, None))
+
+
+def minimum_spanning_tree(C: pd.DataFrame) -> nx.Graph:
+    """Tree connecting all stocks with the smallest total Mantegna distance."""
+    D = mantegna_distance(C).values.copy()
+    np.fill_diagonal(D, 0)
+    # scipy reads a 0 as "no link". That's fine here: only the diagonal is 0,
+    # because duplicate share classes were removed, so no two stocks have rho = 1.
+    tree = scipy_mst(D).tocoo()
+
+    tickers = list(C.index)
+    T = nx.Graph()
+    T.add_nodes_from(tickers)
+    for i, j, d in zip(tree.row, tree.col, tree.data):
+        T.add_edge(tickers[i], tickers[j], distance=float(d), corr=float(C.values[i, j]))
+    return T
+
+
+def same_sector_share(T: nx.Graph, sector_of: dict) -> float:
+    """Fraction of tree links that join two stocks in the same sector."""
+    return float(np.mean([sector_of[u] == sector_of[v] for u, v in T.edges()]))
+
+
+def shuffled_sector_share(T: nx.Graph, sectors: pd.Series, n_shuffles: int = 1000,
+                          seed: int = 0) -> np.ndarray:
+    """Null model: the same tree, with sector labels randomly reassigned to stocks."""
+    rng = np.random.default_rng(seed)
+    nodes = list(T.nodes())
+    labels = sectors.loc[nodes].values
+    return np.array([
+        same_sector_share(T, dict(zip(nodes, rng.permutation(labels))))
+        for _ in range(n_shuffles)
+    ])
