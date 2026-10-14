@@ -1,15 +1,18 @@
-"""Download S&P 500 constituents and daily prices."""
+"""Download S&P 500 constituents and daily prices, clean them, and compute returns."""
 from __future__ import annotations
-import numpy as np
 
 import io
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import requests
 
 WIKI_SP500 = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 DATA_DIR = Path("data")
+
+# Companies listed twice under different share classes. Keep one line per company.
+DUPLICATE_SHARE_CLASSES = ["GOOG", "NWS"]   # keep GOOGL (Alphabet) and NWSA (News Corp)
 
 
 def get_constituents() -> pd.DataFrame:
@@ -61,6 +64,19 @@ def clean_prices(prices: pd.DataFrame, max_gap: int = 5) -> pd.DataFrame:
     return prices.dropna(axis=1)               # drop any stock still missing data
 
 
+def drop_duplicate_share_classes(prices: pd.DataFrame) -> pd.DataFrame:
+    """Remove the second share class of companies that appear twice."""
+    return prices.drop(columns=[t for t in DUPLICATE_SHARE_CLASSES if t in prices.columns])
+
+
 def log_returns(prices: pd.DataFrame) -> pd.DataFrame:
     """Daily log returns: ln(P_t / P_{t-1})."""
     return np.log(prices).diff().dropna(how="all")
+
+# Companies listed twice under different share classes. Keep one line per company.
+DUPLICATE_SHARE_CLASSES = ["GOOG", "NWS"]   # keep GOOGL (Alphabet) and NWSA (News Corp)
+
+
+def drop_duplicate_share_classes(prices: pd.DataFrame) -> pd.DataFrame:
+    """Remove the second share class of companies that appear twice."""
+    return prices.drop(columns=[t for t in DUPLICATE_SHARE_CLASSES if t in prices.columns])

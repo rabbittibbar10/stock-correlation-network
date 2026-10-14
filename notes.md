@@ -31,3 +31,8 @@
 
 ## Open questions / ideas
 -
+
+#random matrix theory:
+
+“Dropped duplicate share classes GOOG and NWS (correlations 0.99 and 0.97 with GOOGL and NWSA): the same company counted twice would double its weight in hub and degree counts.”
+“Kept highly correlated different companies (e.g. MET/PRU 0.91, FITB/RF 0.91) because that similarity is real economic structure.”
