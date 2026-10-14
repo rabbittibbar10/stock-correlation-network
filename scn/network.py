@@ -6,6 +6,9 @@ import numpy as np
 import pandas as pd
 from scipy.sparse.csgraph import minimum_spanning_tree as scipy_mst
 
+from scipy.cluster.hierarchy import fcluster, linkage
+from scipy.spatial.distance import squareform
+from sklearn.metrics import adjusted_rand_score, completeness_score, homogeneity_score
 
 # --------------------------------------------------------------------------
 # Random matrix theory
@@ -76,3 +79,44 @@ def shuffled_sector_share(T: nx.Graph, sectors: pd.Series, n_shuffles: int = 100
         same_sector_share(T, dict(zip(nodes, rng.permutation(labels))))
         for _ in range(n_shuffles)
     ])
+
+# --------------------------------------------------------------------------
+# Communities vs GICS sectors
+# --------------------------------------------------------------------------
+def score_partition(true_labels, pred_labels) -> dict:
+    """ARI (0 = chance, 1 = perfect), homogeneity (pure groups), completeness (unsplit sectors)."""
+    return {
+        "ari": adjusted_rand_score(true_labels, pred_labels),
+        "homogeneity": homogeneity_score(true_labels, pred_labels),
+        "completeness": completeness_score(true_labels, pred_labels),
+    }
+
+
+def louvain_partition(C: pd.DataFrame, resolution: float = 1.0, seed: int = 0) -> pd.Series:
+    """Louvain on the full graph weighted by correlation (negative links set to 0)."""
+    W = np.clip(C.values, 0, None)             # Louvain needs non-negative weights
+    np.fill_diagonal(W, 0)
+    G = nx.from_numpy_array(W)
+    comms = nx.community.louvain_communities(G, weight="weight", resolution=resolution, seed=seed)
+    labels = np.empty(len(C), dtype=int)
+    for k, members in enumerate(comms):
+        labels[list(members)] = k
+    return pd.Series(labels, index=C.index)
+
+
+def louvain_sweep(C: pd.DataFrame, sectors: pd.Series, resolutions, seed: int = 0) -> pd.DataFrame:
+    """Score Louvain against the sectors at each resolution."""
+    rows = []
+    for r in resolutions:
+        part = louvain_partition(C, r, seed)
+        rows.append({"resolution": r, "communities": part.nunique(),
+                     **score_partition(sectors.loc[C.index], part)})
+    return pd.DataFrame(rows)
+
+
+def hierarchical_partition(C: pd.DataFrame, n_clusters: int) -> pd.Series:
+    """Baseline: average-linkage clustering on Mantegna distance, cut into n_clusters groups."""
+    D = mantegna_distance(C).values.copy()
+    np.fill_diagonal(D, 0)
+    Z = linkage(squareform(D, checks=False), method="average")
+    return pd.Series(fcluster(Z, n_clusters, criterion="maxclust"), index=C.index)
